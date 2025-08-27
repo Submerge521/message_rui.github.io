@@ -8,11 +8,8 @@ on:
   workflow_dispatch:
   # 定时触发 (使用 POSIX cron 语法)
   # 默认设置为 UTC 时间每天 00:00 触发 (对应北京时间 08:00)
-  # 你可以根据需要调整时间
   schedule:
     - cron: '0 0 * * *' # 分钟(0-59) 小时(0-23) 日(1-31) 月(1-12) 星期(0-6, 0=周日)
-                        # '0 0 * * *' 表示每天 UTC 00:00 (即北京时间 08:00)
-
 
 # 任务定义
 jobs:
@@ -24,12 +21,15 @@ jobs:
       # 1. 检出代码
       - name: 📥 Checkout code
         uses: actions/checkout@v4 # 使用官方的 checkout action
+        # ⚠️ 关键：为了能够推送更改，需要获取完整的提交历史
+        with:
+          fetch-depth: 0 # 获取所有历史，避免 git push 失败
 
       # 2. 设置 Python 环境
       - name: 🐍 Set up Python
         uses: actions/setup-python@v5 # 使用官方的 setup-python action
         with:
-          python-version: '3.13' # 指定 Python 版本，根据你的代码需求调整
+          python-version: '3.13' # 指定 Python 版本
 
       # 3. 安装依赖
       - name: 📦 Install dependencies
@@ -48,17 +48,36 @@ jobs:
           WECHAT_USER_ID: ${{ secrets.WECHAT_USER_ID }}
           AMAP_KEY: ${{ secrets.AMAP_KEY }}
           
-          # 可选的 Secrets (也可以直接在下面 run 命令中用 -e 设置)
+          # 可选的 Secrets
           CITY: ${{ secrets.CITY }}
           BIRTHDAY: ${{ secrets.BIRTHDAY }}
           RELATIONSHIP_DATE: ${{ secrets.RELATIONSHIP_DATE }}
           GF_NAME: ${{ secrets.GF_NAME }}
           CONSTELLATION: ${{ secrets.CONSTELLATION }}
-
         run: |
-          # 如果你选择将非敏感配置也放在 Secrets 里，就不用下面这些 -e 了
-          # 使用 python-dotenv 或直接在命令行设置环境变量
-          # CITY=广州 BIRTHDAY=02-16 RELATIONSHIP_DATE=2023-05-20 GF_NAME=小睿 CONSTELLATION=水瓶座 python push_message.py
-          
-          # 推荐方式：直接运行，所有配置都从 secrets 读取
-          python daily_message.py
+          python daily_message.py # 确保你的脚本会生成 latest_push.json
+
+      # 5. 📤 提交并推送更改 (关键新增步骤)
+      # 只有在 'Run WeChat Push Script' 成功后才执行
+      - name: 📤 Commit and Push latest_push.json
+        if: success() # 确保前面的步骤都成功了
+        # 使用专门的 action 来推送，处理 GITHUB_TOKEN 权限更可靠
+        uses: ad-m/github-push-action@master 
+        with:
+          # 使用 GitHub 自动提供的 GITHUB_TOKEN
+          # 该 token 具有写入仓库的权限（在 workflow 内部触发）
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # 推送到哪个分支
+          # ${{ github.ref }} 会自动获取当前触发 workflow 的分支 (如 refs/heads/main)
+          branch: ${{ github.ref }}
+          # 要提交的文件
+          # 我们只关心 latest_push.json 和可能的 index.html (如果它也被修改了)
+          # 如果你的 index.html 没有被 daily_message.py 修改，可以只写 latest_push.json
+          paths: |
+            latest_push.json
+            # index.html # 如果你也在 daily_message.py 中修改了 index.html，就取消注释这行
+          # 提交信息
+          commit_message: "📝 自动更新: 发送微信推送并记录内容 $(date '+%Y-%m-%d %H:%M:%S')"
+          # 设置作者信息 (可选)
+          author_name: GitHub Actions
+          author_email: actions@github.com
