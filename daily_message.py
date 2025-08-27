@@ -15,11 +15,12 @@ BIRTHDAY = os.getenv('BIRTHDAY', '02-27')  # 格式: MM-DD
 RELATIONSHIP_DATE = os.getenv('RELATIONSHIP_DATE', '2025-08-18')  # 格式: YYYY-MM-DD
 GF_NAME = os.getenv('GF_NAME', '小睿')
 CONSTELLATION = os.getenv('CONSTELLATION', '白羊座')  # 星座名称
+
 # --- 新增：高德地图 API Key ---
 AMAP_KEY = os.getenv('AMAP_KEY')  # 请务必设置此环境变量
+
 # --- 新增：聚合数据星座 API Key ---
 # JUHE_CONSTELLATION_KEY = os.getenv('JUHE_CONSTELLATION_KEY')  # 请务必设置此环境变量
-
 
 class WeChatMessage:
     def __init__(self):
@@ -27,6 +28,8 @@ class WeChatMessage:
         self.token_expire_time = 0
         # 初始化恋爱日期
         self.init_relationship_date()
+        # 🔑 新增：存储生成的数据，用于返回和写入 JSON
+        self.generated_data = {}
 
     def init_relationship_date(self):
         """初始化恋爱日期"""
@@ -41,19 +44,15 @@ class WeChatMessage:
         if not APPID or not APPSECRET:
             print("❌ 未配置 WECHAT_APPID 或 WECHAT_APPSECRET")
             return None
-
         if self.access_token and datetime.now().timestamp() < self.token_expire_time:
             return self.access_token
-
         url = f"https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid={APPID}&secret={APPSECRET}"
         max_retries = 3
         retry_delay = 2  # 秒
-
         for attempt in range(max_retries):
             try:
                 response = requests.get(url, timeout=10)
                 data = response.json()
-
                 if 'access_token' in data:
                     self.access_token = data['access_token']
                     # 提前300秒过期，避免刚好在发送时过期
@@ -62,12 +61,10 @@ class WeChatMessage:
                     return self.access_token
                 else:
                     print(f"❌ 获取access_token失败: {data}")
-
             except Exception as e:
                 print(f"❌ 获取access_token异常 (尝试 {attempt + 1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay)
-
         return None
 
     def get_weather(self):
@@ -76,25 +73,21 @@ class WeChatMessage:
         if not AMAP_KEY:
             print("⚠️ 未配置高德地图 API Key (AMAP_KEY)，使用本地天气数据")
             return self._get_local_weather()
-
         try:
             # 1. 通过城市名获取 adcode (区域编码)
             geo_url = f"https://restapi.amap.com/v3/geocode/geo?address={CITY}&key={AMAP_KEY}"
             geo_response = requests.get(geo_url, timeout=10)
             geo_data = geo_response.json()
-
             if geo_data.get('status') == '1' and geo_data.get('geocodes'):
                 adcode = geo_data['geocodes'][0]['adcode']
                 print(f"✅ 城市 {CITY} 对应的 adcode: {adcode}")
             else:
                 print(f"❌ 获取城市 {CITY} 的 adcode 失败: {geo_data}")
                 return self._get_local_weather()
-
             # 2. 通过 adcode 获取天气信息
             weather_url = f"https://restapi.amap.com/v3/weather/weatherInfo?city={adcode}&key={AMAP_KEY}&extensions=base"
             weather_response = requests.get(weather_url, timeout=10)
             weather_data = weather_response.json()
-
             if weather_data.get('status') == '1' and weather_data.get('lives'):
                 live_weather = weather_data['lives'][0]
                 weather = live_weather['weather']
@@ -102,7 +95,6 @@ class WeChatMessage:
                 humidity = live_weather['humidity']
                 wind_direction = live_weather['winddirection']
                 wind_power = live_weather['windpower']
-
                 tip = self._get_weather_tip(weather)
                 result = f"🌤️ {weather}, {temperature}°C (湿度{humidity}%, {wind_direction}风{wind_power}级) | {tip}"
                 print(f"✅ 天气获取成功: {result}")
@@ -110,7 +102,6 @@ class WeChatMessage:
             else:
                 print(f"❌ 获取天气信息失败: {weather_data}")
                 return self._get_local_weather()
-
         except Exception as e:
             print(f"❌ 获取天气信息异常: {e}")
             return self._get_local_weather()
@@ -122,7 +113,6 @@ class WeChatMessage:
         month = now.month
         day_temp = random.randint(15, 35)
         night_temp = random.randint(5, day_temp - 5)
-
         if month in [12, 1, 2]:  # 冬季
             weathers = [
                 f"❄️ 晴 {night_temp}°C~{day_temp}°C | 冬天来了，记得穿暖暖",
@@ -143,7 +133,6 @@ class WeChatMessage:
                 f"🍂 晴 {night_temp}°C~{day_temp}°C | 秋高气爽，很舒服呢",
                 f"🌫️ 多云 {night_temp}°C~{day_temp}°C | 云淡风轻，适合郊游"
             ]
-
         chosen_weather = random.choice(weathers)
         print(f"⚠️ 使用本地天气数据: {chosen_weather}")
         return chosen_weather
@@ -171,13 +160,11 @@ class WeChatMessage:
             today = date.today()
             year = today.year
             month, day = map(int, BIRTHDAY.split('-'))
-
             # 处理2月29日的特殊情况
             if month == 2 and day == 29 and not (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)):
                 birthday_this_year = date(year, 3, 1)
             else:
                 birthday_this_year = date(year, month, day)
-
             if today > birthday_this_year:
                 next_year = year + 1
                 # 再次处理明年2月29日的情况
@@ -189,7 +176,6 @@ class WeChatMessage:
                 days_left = (birthday_next_year - today).days
             else:
                 days_left = (birthday_this_year - today).days
-
             # 生成有趣的倒计时描述
             if days_left == 0:
                 return "🎉 今天是生日！生日快乐我的宝贝！"
@@ -203,7 +189,6 @@ class WeChatMessage:
                 return f"📅 还有{days_left}天，期待与你庆祝"
             else:
                 return f"🗓️ 还有{days_left}天，但爱你的心从不停止"
-
         except Exception as e:
             print(f"计算生日失败: {e}")
             return "🎁 生日总是最特别的日子"
@@ -213,7 +198,6 @@ class WeChatMessage:
         try:
             today = date.today()
             days = (today - self.relationship_start).days
-
             if days <= 0:
                 return "💘 今天是我们在一起的第一天！"
             elif days % 365 == 0:
@@ -225,7 +209,6 @@ class WeChatMessage:
                 return f"💖 已经{days}天了，每月都有新甜蜜~"
             else:
                 return f"❤️ 我们已经在一起{days}天啦~"
-
         except Exception as e:
             print(f"计算恋爱天数失败: {e}")
             return "💓 每一天都值得珍惜"
@@ -236,7 +219,6 @@ class WeChatMessage:
         # if not JUHE_CONSTELLATION_KEY:
         #     print("⚠️ 未配置聚合数据星座 API Key (JUHE_CONSTELLATION_KEY)，使用本地模拟数据")
         # return self._get_local_horoscope_summary()
-
         try:
             # 使用 Juhe 提供的星座运势 API
             url = "http://web.juhe.cn:8080/constellation/getAll"
@@ -248,14 +230,11 @@ class WeChatMessage:
             }
             response = requests.get(url, params=params, timeout=10)
             data = response.json()
-
             # 检查API返回是否成功 (Juhe 通常用 error_code 判断)
             if data.get('error_code') == 0 and 'result' in data:
                 horoscope_data = data['result']
-
                 # 提取 summary 字段
                 summary = horoscope_data.get('summary', '')
-
                 if summary:
                     # 可以选择性地添加星座名称前缀，使信息更完整
                     result = f"✨ {CONSTELLATION}今日运势：{summary}"
@@ -263,14 +242,11 @@ class WeChatMessage:
                     return result
                 else:
                     print("⚠️ API返回数据中未包含 'summary' 字段")
-
             else:
                 error_msg = data.get('reason', '未知错误')
                 print(f"❌ 星座API返回失败 (error_code: {data.get('error_code')}): {error_msg}")
-
         except Exception as e:
             print(f"❌ 获取星座运势异常: {e}")
-
         # 如果API调用失败或出错，回退到本地模拟 (仅返回 summary 部分)
         print("⚠️ 星座API调用失败，使用本地模拟数据...")
         return self._get_local_horoscope_summary()
@@ -285,7 +261,6 @@ class WeChatMessage:
             f"💫 {CONSTELLATION}能量播报：",
         ]
         prefix = random.choice(prefixes)
-
         # 定义按运势类型分类的句子
         love_fortunes = [
             "单身者有机会在社交场合遇到心仪的对象，保持开放的心态。",
@@ -327,23 +302,19 @@ class WeChatMessage:
             "出门走走，接触新环境会带来灵感。",
             "今天适合反思和规划，为未来做好准备。"
         ]
-
         # 根据当前日期生成一个“伪随机”种子，使得同一天的运势相对固定
         today_seed = date.today().toordinal()
         # 简单根据星座名称生成一个基础ID
         constellation_id = sum(ord(char) for char in CONSTELLATION)
         random.seed(today_seed + constellation_id)
-
         # 为每个类别随机选择1条
         selected_love = random.choice(love_fortunes)
         selected_work = random.choice(work_fortunes)
         selected_money = random.choice(money_fortunes)
         selected_health = random.choice(health_fortunes)
         selected_general = random.choice(general_fortunes)
-
         # 组合运势信息 (模拟 summary 的感觉)
         horoscope_summary = f"{selected_general} {selected_love} {selected_work} {selected_money} {selected_health}"
-
         # 添加一些可爱的结尾
         endings = [
             "愿你今天被幸福填满！",
@@ -353,7 +324,6 @@ class WeChatMessage:
             "你的存在就是最好的礼物！"
         ]
         horoscope_summary += " " + random.choice(endings)
-
         result = prefix + horoscope_summary
         # 重置随机种子，避免影响其他部分
         random.seed()
@@ -366,7 +336,6 @@ class WeChatMessage:
             url = "https://v1.hitokoto.cn/"
             response = requests.get(url, timeout=10)
             data = response.json()
-
             if 'hitokoto' in data:
                 quote = data['hitokoto']
                 # from字段可能为空
@@ -376,7 +345,6 @@ class WeChatMessage:
                 return result
         except Exception as e:
             print(f"❌ 获取每日一句异常: {e}")
-
         # 失败时使用备用句子
         fallback_quotes = [
             "生活就像海洋，只有意志坚强的人，才能到达彼岸。—— 马克思",
@@ -394,14 +362,11 @@ class WeChatMessage:
         if not TEMPLATE_ID or not USER_ID:
             print("❌ 未配置 WECHAT_TEMPLATE_ID 或 WECHAT_USER_ID")
             return False
-
         token = self.get_access_token()
         if not token:
             print("❌ 无法获取有效的 access_token")
             return False
-
         url = f"https://api.weixin.qq.com/cgi-bin/message/template/send?access_token={token}"
-
         # 1. 获取数据
         weather_info = self.get_weather()
         birthday_info = self.calculate_days_until_birthday()
@@ -410,7 +375,20 @@ class WeChatMessage:
         daily_quote = self.get_daily_quote()
         current_date = datetime.now().strftime("%Y年%m月%d日")
 
-        # 2. 构造消息数据 (字段名需与微信模板一致)
+        # 🔑 2. 构造消息数据 (字段名需与微信模板一致)
+        # 同时，将这些数据存储到 self.generated_data 中，用于后续返回
+        self.generated_data = {
+            "date": current_date,
+            "city": CITY,
+            "weather": weather_info,
+            "love_days": love_days_info,
+            "birthday_left": birthday_info,
+            "constellation": CONSTELLATION,
+            "horoscope": horoscope_info,
+            "daily_quote": daily_quote,
+            "girlfriend_name": GF_NAME
+        }
+
         payload = {
             "touser": USER_ID,
             "template_id": TEMPLATE_ID,
@@ -441,43 +419,47 @@ class WeChatMessage:
             return False
 
     def run(self):
-        """执行推送任务"""
+        """执行推送任务，并返回生成的数据和发送结果"""
         print("--- 开始执行推送任务 ---")
-
         # 直接发送消息
         success = self.send_message()
-
         if success:
             print("--- 消息推送任务完成 ---")
         else:
             print("--- 消息推送任务失败 ---")
 
+        # 🔑 返回一个包含发送结果和生成数据的字典
+        # 这样主程序可以知道是否成功，并获取到用于展示的数据
+        return {
+            "success": success,
+            "generated_data": self.generated_data,
+            "timestamp": datetime.now().isoformat()
+        }
 
+
+# --- 主程序入口 ---
 if __name__ == "__main__":
     wm = WeChatMessage()
-    wm.run()
-    # 如果需要定时任务，可以使用 APScheduler
-    # from apscheduler.schedulers.blocking import BlockingScheduler
-    # scheduler = BlockingScheduler()
-    # scheduler.add_job(wm.run, 'cron', hour=8, minute=0) # 每天8点执行
-    # print("定时任务已启动...")
-    # try:
-    #     scheduler.start()
-    # except KeyboardInterrupt:
-    #     print("定时任务已停止。")
-    #     scheduler.shutdown()
+    # 🔑 调用 run() 方法，并接收返回的字典
+    result = wm.run()
 
-    # 1. 创建一个包含内容和时间戳的字典
+    # 🔑 从返回结果中提取数据
+    generated_data = result.get("generated_data", {})
+    success = result.get("success", False)
+    timestamp = result.get("timestamp", datetime.now().isoformat())
+
+    # 🔑 1. 创建一个包含内容和时间戳的字典，用于写入 JSON
+    # 这个字典包含了所有你想在网页上展示的信息
     push_data = {
-        "content": success,  # 这是你生成的微信推送文本
-        "timestamp": datetime.now().isoformat(), # 记录生成时间
-        "title": "今日推送" # 可以加个标题
+        "success": success, # 推送是否成功
+        "data": generated_data, # 包含日期、天气、恋爱天数等具体数据
+        "timestamp": timestamp # 任务执行时间
     }
-    
-    # 2. 将字典写入 JSON 文件
-    # 确保这个路径是相对于仓库根目录的
-    with open('latest_push.json', 'w', encoding='utf-8') as f:
-        json.dump(push_data, f, ensure_ascii=False, indent=2)
-    
-    print("✅ 推送内容已保存到 latest_push.json")
 
+    # 🔑 2. 将字典写入 JSON 文件
+    try:
+        with open('latest_push.json', 'w', encoding='utf-8') as f:
+            json.dump(push_data, f, ensure_ascii=False, indent=2)
+        print("✅ 推送内容已成功保存到 latest_push.json")
+    except Exception as e:
+        print(f"❌ 保存 latest_push.json 时出错: {e}")
