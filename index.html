@@ -1,70 +1,53 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <title>微信服务号推送内容展示</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            max-width: 800px;
-            margin: auto;
-            background: #fff;
-            padding: 20px;
-            box-shadow: 0 0 10px rgba(0,0,0,.1);
-        }
-        h1 {
-            color: #333;
-        }
-        p {
-            line-height: 1.6;
-            color: #555;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>微信服务号推送内容展示</title>
+<style>
+/* 你的 CSS 样式 */
+body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+.container { max-width: 800px; margin: auto; background: #fff; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,.1); }
+h1, .push-item { margin: 20px 0; }
+.timestamp { color: #666; font-size: 0.9em; }
+</style>
 </head>
 <body>
-
 <div class="container">
-    <h1>微信服务号推送内容</h1>
-    <div id="content"></div>
+<h1>微信服务号推送记录</h1>
+<div id="content-history">
+<!-- 内容将由 JavaScript 动态插入 -->
+</div>
 </div>
 
 <script>
-function decodeUrlEncodedString(encodedStr) {
-    const urlEncodedChars = {
-        '%20': ' ', // 空格
-        '%21': '!', // 叹号
-        // ... 其他字符替换 ...
-    };
-
-    return encodedStr.replace(/%[0-9A-F]{2}/gi, function(match) {
-        return urlEncodedChars[match] || match; // 如果没有匹配的编码，则返回原字符
-    });
-}
-
-function getBase64ContentFromUrl(url) {
-    const regex = /(?:\?|&)(content=)([^&]+)/;
-    const match = url.match(regex);
-    if (match && match[2]) {
-        return decodeURIComponent(decodeUrlEncodedString(match[2]));
-    }
-    return null;
-}
-
+// 当页面加载完成后执行
 document.addEventListener('DOMContentLoaded', function() {
-    const content = getBase64ContentFromUrl(window.location.search);
-    const contentDiv = document.getElementById('content');
-    if (content) {
-        contentDiv.innerHTML = `<p>${content}</p>`;
-    } else {
-        contentDiv.innerHTML = '<p>未找到内容。</p>';
-    }
+const contentDiv = document.getElementById('content-history');
+
+// 尝试获取最新的推送内容
+fetch('latest_push.json')
+.then(response => {
+if (!response.ok) {
+throw new Error('Network response was not ok');
+}
+return response.json();
+})
+.then(data => {
+// 创建一个元素来显示内容
+const pushItem = document.createElement('div');
+pushItem.className = 'push-item';
+pushItem.innerHTML = `
+<h3>${data.title || '推送内容'}</h3>
+<p>${data.content}</p>
+<p class="timestamp">推送时间: ${new Date(data.timestamp).toLocaleString()}</p>
+`;
+contentDiv.appendChild(pushItem);
+})
+.catch(error => {
+console.error('获取推送内容失败:', error);
+contentDiv.innerHTML = '<p>暂无推送记录或加载失败。</p>';
+});
 });
 </script>
-
 </body>
 </html>
