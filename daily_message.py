@@ -469,7 +469,7 @@ if __name__ == "__main__":
 
     # 1. 创建一个包含内容和时间戳的字典
     push_data = {
-        "content": message_text,  # 这是你生成的微信推送文本
+        "content": success,  # 这是你生成的微信推送文本
         "timestamp": datetime.now().isoformat(), # 记录生成时间
         "title": "今日推送" # 可以加个标题
     }
