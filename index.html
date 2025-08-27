@@ -1,53 +1,137 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<title>微信服务号推送内容展示</title>
-<style>
-/* 你的 CSS 样式 */
-body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
-.container { max-width: 800px; margin: auto; background: #fff; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,.1); }
-h1, .push-item { margin: 20px 0; }
-.timestamp { color: #666; font-size: 0.9em; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小睿的每日推送</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: #4a5568;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2rem;
+        }
+        .content {
+            padding: 30px;
+        }
+        .push-item {
+            background: #f7fafc;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .push-item h3 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        .push-item p {
+            margin: 10px 0;
+            line-height: 1.6;
+            color: #4a5568;
+            white-space: pre-line; /* 保留文本中的换行符 */
+        }
+        .timestamp {
+            color: #718096;
+            font-size: 0.9em;
+            margin-top: 10px;
+            text-align: right;
+        }
+        .loading {
+            text-align: center;
+            color: #718096;
+            font-style: italic;
+        }
+        .error {
+            color: #e53e3e;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
 </head>
 <body>
-<div class="container">
-<h1>微信服务号推送记录</h1>
-<div id="content-history">
-<!-- 内容将由 JavaScript 动态插入 -->
-</div>
-</div>
+    <div class="container">
+        <div class="header">
+            <h1>💌 微信服务号推送记录</h1>
+        </div>
+        <div class="content">
+            <div id="content-display">
+                <p class="loading">加载中...</p>
+            </div>
+        </div>
+    </div>
 
-<script>
-// 当页面加载完成后执行
-document.addEventListener('DOMContentLoaded', function() {
-const contentDiv = document.getElementById('content-history');
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const contentDisplay = document.getElementById('content-display');
+            const jsonUrl = 'latest_push.json'; // 确保路径正确
 
-// 尝试获取最新的推送内容
-fetch('latest_push.json')
-.then(response => {
-if (!response.ok) {
-throw new Error('Network response was not ok');
-}
-return response.json();
-})
-.then(data => {
-// 创建一个元素来显示内容
-const pushItem = document.createElement('div');
-pushItem.className = 'push-item';
-pushItem.innerHTML = `
-<h3>${data.title || '推送内容'}</h3>
-<p>${data.content}</p>
-<p class="timestamp">推送时间: ${new Date(data.timestamp).toLocaleString()}</p>
-`;
-contentDiv.appendChild(pushItem);
-})
-.catch(error => {
-console.error('获取推送内容失败:', error);
-contentDiv.innerHTML = '<p>暂无推送记录或加载失败。</p>';
-});
-});
-</script>
+            fetch(jsonUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // 清空 loading 提示
+                    contentDisplay.innerHTML = '';
+
+                    // 创建推送内容容器
+                    const pushItem = document.createElement('div');
+                    pushItem.className = 'push-item';
+
+                    // 使用 innerHTML 并信任 pre-line 来保留格式
+                    pushItem.innerHTML = `
+                        <h3>${data.title || '推送内容'}</h3>
+                        <p>${data.content}</p>
+                        <p class="timestamp">推送时间: ${new Date(data.timestamp).toLocaleString('zh-CN', { 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}</p>
+                    `;
+
+                    contentDisplay.appendChild(pushItem);
+                })
+                .catch(error => {
+                    console.error('加载推送内容失败:', error);
+                    contentDisplay.innerHTML = `
+                        <div class="error">
+                            <p>加载失败 😔</p>
+                            <p>可能原因：</p>
+                            <ul>
+                                <li>尚未生成推送内容（请等待定时任务或手动触发）</li>
+                                <li><code>latest_push.json</code> 文件不存在或路径错误</li>
+                                <li>网络问题</li>
+                            </ul>
+                            <p>错误详情: ${error.message}</p>
+                        </div>
+                    `;
+                });
+        });
+    </script>
 </body>
 </html>
