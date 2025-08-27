@@ -467,5 +467,17 @@ if __name__ == "__main__":
     #     print("定时任务已停止。")
     #     scheduler.shutdown()
 
-
+    # 1. 创建一个包含内容和时间戳的字典
+    push_data = {
+        "content": message_text,  # 这是你生成的微信推送文本
+        "timestamp": datetime.now().isoformat(), # 记录生成时间
+        "title": "今日推送" # 可以加个标题
+    }
+    
+    # 2. 将字典写入 JSON 文件
+    # 确保这个路径是相对于仓库根目录的
+    with open('latest_push.json', 'w', encoding='utf-8') as f:
+        json.dump(push_data, f, ensure_ascii=False, indent=2)
+    
+    print("✅ 推送内容已保存到 latest_push.json")
 
